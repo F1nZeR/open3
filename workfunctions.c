@@ -15,7 +15,7 @@ void start_timer();
 void writelog(char *buffer, int target);
 
 int pipe_rw[2], pipe_wr[2], pipe_err[2];
-int isAnyIO = 0, secs_timer = 1, logfilefd;
+int isAnyIO = 0, secs_timer = 1, logfilefd, childpid;
 
 int startProgram(char *path, int multiplex, int logfile_fd)
 {
@@ -44,6 +44,7 @@ int startProgram(char *path, int multiplex, int logfile_fd)
 	else 
 	{
 		// parent: handler
+		childpid = pid;
 		pid_t newPid = fork();
 		if (newPid == 0)
 		{
@@ -54,14 +55,14 @@ int startProgram(char *path, int multiplex, int logfile_fd)
 				int read_cnt = read(STDIN_FILENO, buffer, sizeof(buffer));
 				if (read_cnt > 0)
 				{
-					write(pipe_wr[1], buffer, read_cnt);
-					writelog(buffer, STDIN_FILENO);
-					
 					if (strcmp(buffer, "exit\n") == 0)
 					{
 						kill(pid, SIGTERM);
 						return 0;
 					}
+
+					write(pipe_wr[1], buffer, read_cnt);
+					writelog(buffer, STDIN_FILENO);
 				}
 			}
 		}
@@ -190,13 +191,19 @@ void writelog(char *buffer, int target)
 
 	if (target == -1)
 	{
+		// log
 		sprintf(out_buffer, "%s, %s\n", time_str, buffer);
 	} 
 	else 
-	{	
-		sprintf(out_buffer, "%s / >%d / %s", time_str,
+	{
+		// out
+		sprintf(out_buffer, "%d / >%d / %s", childpid,
 			target, buffer);
 		write(target, out_buffer, strlen(out_buffer));
+
+		// log
+		sprintf(out_buffer, "%s / >%d / %s", time_str,
+			target, buffer);
 	}
 	write(logfilefd, out_buffer, strlen(out_buffer));
 }
