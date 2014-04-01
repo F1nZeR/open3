@@ -1,1 +1,0 @@
-int startProgram(char *path, int multiplex, int logfile_fd);
