@@ -9,9 +9,7 @@
 #include <errno.h>
 #include <time.h>
 
-void child_out_handle(int signum);
-void child_err_handle(int signum);
-void handle_stdin(int signum);
+void childSignalIOHandle(int signum);
 int handle_io_select(int child_pid);
 void start_timer();
 void writelog(char *buffer, int target);
@@ -52,35 +50,16 @@ int startProgram(char *path, int multiplex, int logfile_fd)
 		}
 		else
 		{
-			int outPid = fork();
-			if (outPid == 0)
-			{
-				// STDOUT SIGNAL
-				signal(SIGIO, child_out_handle);
-				fcntl(pipe_rw[0], F_SETOWN, getpid());
-				fcntl(pipe_rw[0], F_SETFL, FASYNC | O_NONBLOCK);
-				while (1) sleep(100);				
-			}
-
-			int errPid = fork();
-			if (errPid == 0)
-			{
-				// STDERR SIGNAL
-				signal(SIGIO, child_err_handle);
-				fcntl(pipe_err[0], F_SETOWN, getpid());
-				fcntl(pipe_err[0], F_SETFL, FASYNC | O_NONBLOCK);
-				while (1) sleep(100);				
-			}
-
-			// STDIN signal
-			signal(SIGIO, handle_stdin);
+			signal(SIGIO, childSignalIOHandle);
 			fcntl(STDIN_FILENO, F_SETOWN, getpid());
 			fcntl(STDIN_FILENO, F_SETFL, FASYNC | O_NONBLOCK);
+			fcntl(pipe_rw[0], F_SETOWN, getpid());
+			fcntl(pipe_rw[0], F_SETFL, FASYNC | O_NONBLOCK);
+			fcntl(pipe_err[0], F_SETOWN, getpid());
+			fcntl(pipe_err[0], F_SETFL, FASYNC | O_NONBLOCK);
 
 			start_timer();
 			waitpid(pid, &status, 0);
-			kill(outPid, SIGTERM);
-			kill(errPid, SIGTERM);
 		}
 		printf("%d TERMINATED WITH EXIT CODE: %d\n", pid, status % 256);
 		close(logfilefd);
@@ -113,31 +92,7 @@ void start_timer()
 	setitimer(ITIMER_REAL, &it_val, NULL);
 }
 
-void child_out_handle(int signum)
-{
-	char buffer[2048];
-	memset(buffer, '\0', sizeof(buffer));
-	int read_cnt = read(pipe_rw[0], buffer, sizeof(buffer));
-	if (read_cnt > 0)
-	{
-		isAnyIO = 1;
-		writelog(buffer, STDOUT_FILENO);
-	}
-}
-
-void child_err_handle(int signum)
-{
-	char buffer[2048];
-	memset(buffer, '\0', sizeof(buffer));
-	int read_cnt = read(pipe_err[0], buffer, sizeof(buffer));
-	if (read_cnt > 0) 
-	{
-		isAnyIO = 1;
-		writelog(buffer, STDERR_FILENO);
-	}
-}
-
-void handle_stdin(int signum)
+void childSignalIOHandle(int signum)
 {
 	char buffer[2048];
 	memset(buffer, '\0', sizeof(buffer));
@@ -152,6 +107,26 @@ void handle_stdin(int signum)
 
 		write(pipe_wr[1], buffer, read_cnt);
 		writelog(buffer, STDIN_FILENO);
+	} 
+	else 
+	{
+		memset(buffer, '\0', sizeof(buffer));
+		int read_cnt = read(pipe_rw[0], buffer, sizeof(buffer));
+		if (read_cnt > 0)
+		{
+			isAnyIO = 1;
+			writelog(buffer, STDOUT_FILENO);
+		} 
+		else 
+		{
+			memset(buffer, '\0', sizeof(buffer));
+			int read_cnt = read(pipe_err[0], buffer, sizeof(buffer));
+			if (read_cnt > 0) 
+			{
+				isAnyIO = 1;
+				writelog(buffer, STDERR_FILENO);
+			}
+		}
 	}
 }
 
@@ -201,12 +176,17 @@ int handle_io_select(int child_pid)
 			
 			if (FD_ISSET(pipe_err[0], &fdset_r))
 			{
-				child_err_handle(0);
+				memset(buffer, '\0', sizeof(buffer));
+				int read_cnt = read(pipe_err[0], buffer, sizeof(buffer));
+				if (read_cnt > 0) 
+				{
+					writelog(buffer, STDERR_FILENO);
+				}
 			}
 
 			if (FD_ISSET(STDIN_FILENO, &fdset_r))
 			{
-				handle_stdin(0);
+				childSignalIOHandle(0);
 			}
 		}
 	}
