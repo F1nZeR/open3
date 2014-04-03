@@ -1,3 +1,3 @@
 CC=gcc 
 CFLAGS=-Wall
-main: main.o arghandle.o
+main: main.o arghandle.o sysvipc.o

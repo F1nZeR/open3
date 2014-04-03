@@ -11,17 +11,19 @@
 #include "sysvipc.h"
 
 void childSignalIOHandle(int signum);
+int handleStdin();
 int handle_io_select(int child_pid);
 void start_timer();
 void goDaemon();
 void writelog(char *buffer, int target);
 
 int pipe_rw[2], pipe_wr[2], pipe_err[2];
-int isAnyIO = 0, secs_timer = 1, logfilefd, childpid;
+int isAnyIO = 0, secs_timer = 1, logfilefd, childpid, curIpcType, lastUserPid;
 
 int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int ipcType)
 {
 	logfilefd = logfile_fd;
+	curIpcType = ipcType;
 
 	// wr: parent [w]rite, child [r]ead
 	int status;
@@ -60,8 +62,6 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 	else
 	{
 		signal(SIGIO, childSignalIOHandle);
-		fcntl(STDIN_FILENO, F_SETOWN, getpid());
-		fcntl(STDIN_FILENO, F_SETFL, FASYNC | O_NONBLOCK);
 		fcntl(pipe_rw[0], F_SETOWN, getpid());
 		fcntl(pipe_rw[0], F_SETFL, FASYNC | O_NONBLOCK);
 		fcntl(pipe_err[0], F_SETOWN, getpid());
@@ -86,6 +86,7 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 
 void sigalrm_handler()
 {
+	handleStdin();
 	if (!isAnyIO)
 	{
 		writelog("NO I/O", -1);
@@ -111,21 +112,29 @@ void start_timer()
 
 int handleStdin()
 {
-	char buffer[2048];
-	memset(buffer, '\0', sizeof(buffer));
-	int read_cnt = read(STDIN_FILENO, buffer, sizeof(buffer));
-	if (read_cnt > 0)
+	if (curIpcType == 1)
 	{
-		isAnyIO = 1;
-		if (strcmp(buffer, "exit\n") == 0)
+		struct mymsg msg;
+		msg = recieve_message_sysv();
+		if (msg.type == -1)
 		{
-			kill(childpid, SIGTERM);
+			return 0;
 		}
+		else 
+		{
+			isAnyIO = 1;
+			lastUserPid = msg.type;
+			if (strcmp(msg.msg, "exit\n") == 0)
+			{
+				kill(childpid, SIGTERM);
+			}
 
-		write(pipe_wr[1], buffer, read_cnt);
-		writelog(buffer, STDIN_FILENO);
+			write(pipe_wr[1], msg.msg, strlen(msg.msg));
+			writelog(msg.msg, STDIN_FILENO);
+			return strlen(msg.msg);
+		}
 	}
-	return read_cnt;
+	return 0;
 }
 
 void childSignalIOHandle(int signum)
@@ -167,11 +176,9 @@ int handle_io_select(int child_pid)
 		FD_ZERO(&fdset_r);
 		FD_SET(pipe_rw[0], &fdset_r);
 		FD_SET(pipe_err[0], &fdset_r);
-		FD_SET(STDIN_FILENO, &fdset_r);
 		timeout.tv_sec = secs_timer;
 
 		int maxfd = pipe_rw[0] > pipe_err[0] ? pipe_rw[0] : pipe_err[0];
-		maxfd = maxfd > STDIN_FILENO ? maxfd : STDIN_FILENO;
 
 		ready_fd = select(maxfd+1, &fdset_r, NULL, NULL, &timeout);
 		
@@ -183,7 +190,11 @@ int handle_io_select(int child_pid)
 		{
 			res_pid = waitpid(child_pid, &status, WNOHANG | WUNTRACED);
 			if (res_pid == child_pid) return status;
-			writelog("NO I/O", -1);
+			
+			if (handleStdin() == 0) 
+			{
+				writelog("NO I/O", -1);
+			}
 		} 
 		else
 		{
@@ -207,11 +218,6 @@ int handle_io_select(int child_pid)
 					writelog(buffer, STDERR_FILENO);
 				}
 			}
-
-			if (FD_ISSET(STDIN_FILENO, &fdset_r))
-			{
-				handleStdin();
-			}
 		}
 	}
 }
@@ -231,11 +237,14 @@ void writelog(char *buffer, int target)
 	{
 		// log
 		sprintf(out_buffer, "%s, %s\n", time_str, buffer);
-	} 
-	else 
+	}
+	else
 	{
 		sprintf(out_buffer, "%d / >%d / %s", childpid,
 			target, buffer);
+		
+		// шлём сообщение через очередь
+		send_message_sysv(lastUserPid, out_buffer, target);
 		//write(target, out_buffer, strlen(out_buffer));
 
 		// log
