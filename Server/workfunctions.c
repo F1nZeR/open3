@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <time.h>
 #include "sysvipc.h"
+#include "posixipc.h"
+#include "workfunctions.h"
 
 void childSignalIOHandle(int signum);
 int handleStdin();
@@ -21,7 +23,14 @@ int isAnyIO = 0, secs_timer = 1, logfilefd, childpid, curIpcType, lastUserPid;
 
 void termination_handler(int signum)
 {
-	disposeSysV();
+	if (curIpcType == 0)
+	{
+		dispose_posix();
+	}
+	else
+	{
+		disposeSysV();
+	}
 }
 
 int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int ipcType)
@@ -59,9 +68,12 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 	childpid = pid;
 	signal(SIGCHLD, SIG_DFL);
 
-	if (ipcType == 1)
+	if (ipcType == 0)
 	{
-		// sysV
+		init_posix(ftokPath);
+	}
+	else
+	{
 		initSysV(ftokPath);
 	}
 
@@ -86,10 +98,7 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 	sprintf(buffer, "%d TERMINATED WITH EXIT CODE: %d\n", pid, status % 256);
 	writelog(buffer, STDOUT_FILENO);
 	
-	if (ipcType == 1)
-	{
-		disposeSysV();
-	}
+	termination_handler(0);
 	close(logfilefd);
 	return 0;
 }
@@ -122,29 +131,58 @@ void start_timer()
 
 int handleStdin()
 {
-	if (curIpcType == 1)
+	struct mymsg msg;
+	
+	if (curIpcType == 0)
 	{
-		struct mymsg msg;
+		msg = recieve_message_posix();
+	}
+	else
+	{
 		msg = recieve_message_sysv();
-		if (msg.type == -1)
-		{
-			return 0;
-		}
-		else 
-		{
-			isAnyIO = 1;
-			lastUserPid = msg.target;
-			if (strcmp(msg.msg, "exit\n") == 0)
-			{
-				kill(childpid, SIGTERM);
-			}
+	}
 
-			write(pipe_wr[1], msg.msg, strlen(msg.msg));
-			writelog(msg.msg, STDIN_FILENO);
+	if (msg.type == -1)
+	{
+		return 0;
+	}
+	else 
+	{
+		isAnyIO = 1;
+		lastUserPid = msg.target;
+		if (strcmp(msg.msg, "exit\n") == 0)
+		{
+			kill(childpid, SIGTERM);
+		}
+		if (strcmp(msg.msg, "register\n") == 0)
+		{
+			if (curIpcType == 0)
+			{
+				reguser_posix(msg.target);
+			}
+			else
+			{
+				reguser_sysv(msg.target);
+			}
 			return strlen(msg.msg);
 		}
+		if (strcmp(msg.msg, "unregister\n") == 0)
+		{
+			if (curIpcType == 0)
+			{
+				unreguser_posix(msg.target);
+			}
+			else
+			{
+				unreguser_sysv(msg.target);
+			}
+			return strlen(msg.msg);
+		}
+
+		write(pipe_wr[1], msg.msg, strlen(msg.msg));
+		writelog(msg.msg, STDIN_FILENO);
+		return strlen(msg.msg);
 	}
-	return 0;
 }
 
 void childSignalIOHandle(int signum)
@@ -254,7 +292,14 @@ void writelog(char *buffer, int target)
 			target, buffer);
 		
 		// шлём сообщение через очередь
-		send_message_sysv(lastUserPid, out_buffer, target);
+		if (curIpcType == 0)
+		{
+			send_message_posix(lastUserPid, out_buffer, target);
+		}
+		else
+		{
+			send_message_sysv(lastUserPid, out_buffer, target);	
+		}
 		//write(target, out_buffer, strlen(out_buffer));
 
 		// log

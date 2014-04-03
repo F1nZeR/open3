@@ -14,7 +14,7 @@ key_t key;
 struct sembuf operations[2];
 short sarray[2];
 int rc, semid, shmid, msgid;
-void *shm_address;
+struct register_info *shm_address;
 struct shmid_ds shmid_struct;
 long pid;
 
@@ -29,26 +29,16 @@ void initSysV(char *ftokPath, pid_t targetPid)
 	}
 
 	// semaphor
-	// 1 - is running
-	// 2 - is being used
 	semid = semget(key, 2, 0666);
 	if (semid == -1)
 	{
 		perror("error on semget()");
 		exit(1);
 	}
-	sarray[0] = 1;
-	sarray[1] = 0;
-	// todo: only one instance may be runned
-	rc = semctl(semid, 1, SETALL, sarray);
-	if (rc == -1)
-	{
-		perror("semctl error");
-		exit(1);
-	}
 
 	// shared memory
-	shmid = shmget(key, 50, 0666);
+	size_t structSize = sizeof(struct register_info) * 10;
+	shmid = shmget(key, structSize, 0666);
 	if (shmid == -1)
 	{
 		perror("error on shmget()");
@@ -79,6 +69,40 @@ void disposeSysV()
 		perror("error on shmdt");
 		exit(1);
 	}
+}
+
+void getSemaphoreControl_sysv()
+{
+	operations[0].sem_num = 1;
+	operations[0].sem_op = 0;
+	operations[0].sem_flg = 0;
+	operations[1].sem_num = 1;
+	operations[1].sem_op = 1;
+	operations[1].sem_flg = 0;
+	semop(semid, operations, 2);
+}
+
+void freeSemaphore_sysv()
+{
+	operations[0].sem_num = 1;
+	operations[0].sem_op = -1;
+	operations[0].sem_flg = 0;
+	semop(semid, operations, 1);
+}
+
+void getRegisterInfo_sysv()
+{
+	getSemaphoreControl_sysv();
+	int i;
+	for (i = 0; i < 10; ++i)
+	{
+		if (shm_address[i].pid > 0)
+		{
+			printf("PID: %d (%d/%d/%d)\n", shm_address[i].pid, shm_address[i].stdin_count,
+				shm_address[i].stdout_count, shm_address[i].stderr_count);
+		}
+	}
+	freeSemaphore_sysv();
 }
 
 void send_message_sysv(char *message)
