@@ -28,7 +28,7 @@ void initSysV(char *ftokPath)
 	// semaphor
 	// 1 - is running
 	// 2 - is being used
-	semid = semget(key, 2, 0666 | IPC_CREAT | IPC_EXCL);
+	semid = semget(key, 2, 0666 | IPC_CREAT);
 	if (semid == -1)
 	{
 		perror("error on semget()");
@@ -45,7 +45,7 @@ void initSysV(char *ftokPath)
 	}
 
 	// shared memory
-	shmid = shmget(key, 50, 0666 | IPC_CREAT | IPC_EXCL);
+	shmid = shmget(key, 50, 0666 | IPC_CREAT);
 	if (shmid == -1)
 	{
 		perror("error on shmget()");
@@ -91,7 +91,7 @@ void disposeSysV()
 		exit(1);
 	}
 
-	rc = msgctl(msgid, IPC_RMID, 0);
+	//rc = msgctl(msgid, IPC_RMID, 0);
 	if (rc == -1)
 	{
 		perror("error on msgctl()");
@@ -99,20 +99,19 @@ void disposeSysV()
 	}
 }
 
-void send_message_sysv(int targetPid, char message[200], int target)
+void send_message_sysv(long targetPid, char message[200], int target)
 {
 	struct mymsg msg;
-	strcpy(msg.msg, message);
+	strncpy(msg.msg, message, sizeof(msg.msg));
 	msg.target = target;
 	msg.type = targetPid;
-
 	msgsnd(msgid, &msg, sizeof(struct mymsg) - sizeof(long), 0);
 }
 
 struct mymsg recieve_message_sysv()
 {
 	struct mymsg msg;
-	if (msgrcv(msgid, &msg, sizeof(struct mymsg) - sizeof(long), 0, IPC_NOWAIT) == -1)
+	if (msgrcv(msgid, &msg, sizeof(struct mymsg) - sizeof(long), 1, IPC_NOWAIT) == -1)
 	{
 		msg.type = -1;
 	}

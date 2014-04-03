@@ -14,11 +14,15 @@ void childSignalIOHandle(int signum);
 int handleStdin();
 int handle_io_select(int child_pid);
 void start_timer();
-void goDaemon();
 void writelog(char *buffer, int target);
 
 int pipe_rw[2], pipe_wr[2], pipe_err[2];
 int isAnyIO = 0, secs_timer = 1, logfilefd, childpid, curIpcType, lastUserPid;
+
+void termination_handler(int signum)
+{
+	disposeSysV();
+}
 
 int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int ipcType)
 {
@@ -45,8 +49,14 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 	}
 
 	// parent
+	if (signal (SIGINT, termination_handler) == SIG_IGN)
+         signal (SIGINT, SIG_IGN);
+	if (signal (SIGHUP, termination_handler) == SIG_IGN)
+		signal (SIGHUP, SIG_IGN);
+	if (signal (SIGTERM, termination_handler) == SIG_IGN)
+		signal (SIGTERM, SIG_IGN);
+
 	childpid = pid;
-	signal(SIGTERM, SIG_DFL);
 	signal(SIGCHLD, SIG_DFL);
 
 	if (ipcType == 1)
@@ -123,7 +133,7 @@ int handleStdin()
 		else 
 		{
 			isAnyIO = 1;
-			lastUserPid = msg.type;
+			lastUserPid = msg.target;
 			if (strcmp(msg.msg, "exit\n") == 0)
 			{
 				kill(childpid, SIGTERM);

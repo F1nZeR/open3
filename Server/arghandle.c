@@ -29,7 +29,7 @@ struct arg_data handleArgs(int argc, char **argv)
 		switch (c)
 		{
 			case 'l':
-				logfile_fd = open(optarg, O_WRONLY | O_CREAT | O_TRUNC, 770);
+				logfile_fd = open(optarg, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
 				if (logfile_fd < 0)
 				{
 					char *buffer = strerror(errno);

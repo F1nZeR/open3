@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 struct mymsg
 {
 	long type;
@@ -7,5 +9,5 @@ struct mymsg
 
 void initSysV(char *ftokPath);
 void disposeSysV();
-void send_message_sysv(int targetPid, char message[200], int target);
+void send_message_sysv(long targetPid, char message[200], int target);
 struct mymsg recieve_message_sysv();

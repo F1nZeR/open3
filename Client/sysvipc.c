@@ -6,6 +6,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "sysvipc.h"
+#include <string.h>
+#include <unistd.h>
 
 key_t key;
 struct sembuf operations[2];
@@ -13,9 +16,11 @@ short sarray[2];
 int rc, semid, shmid, msgid;
 void *shm_address;
 struct shmid_ds shmid_struct;
+long pid;
 
-void initSysV(char *ftokPath)
+void initSysV(char *ftokPath, pid_t targetPid)
 {
+	pid = targetPid;
 	key = ftok(ftokPath, 1);
 	if (key == -1)
 	{
@@ -74,4 +79,28 @@ void disposeSysV()
 		perror("error on shmdt");
 		exit(1);
 	}
+}
+
+void send_message_sysv(char *message)
+{
+	struct mymsg msg;
+	msg.type = 1;
+	msg.target = pid;
+	strncpy(msg.msg, message, sizeof(msg.msg));
+	if (msgsnd(msgid, &msg, sizeof(struct mymsg) - sizeof(long), 0) < 0)
+	{
+		perror("error on msgsnd");
+		exit(1);
+	}
+}
+
+struct mymsg recieve_message_sysv()
+{
+	struct mymsg msg;
+	if (msgrcv(msgid, &msg, sizeof(struct mymsg) - sizeof(long), pid, 0) < 0)
+	{
+		perror("error on msgrcv");
+		exit(1);
+	}
+	return msg;
 }
