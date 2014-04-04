@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <semaphore.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <mqueue.h>
 #include <errno.h>
@@ -10,13 +11,12 @@
 #include <fcntl.h>
 #include "workfunctions.h"
 
-#define SEM1_NAME "/sem1"
-#define SEM2_NAME "/sem2"
+#define SEM_NAME "/sem"
 #define SHM_NAME "/shm"
 #define MQ_NAME "/mq"
 #define MSGS_IN_MQ 10
 
-sem_t *sem1, *sem2;
+sem_t *sem;
 short sarray[2];
 int rc, shmid;
 mqd_t mq;
@@ -24,18 +24,12 @@ struct register_info *shm_address;
 
 void init_posix(char *ftokPath)
 {
-	if ((sem1 = sem_open(SEM1_NAME, O_CREAT, 0666, 0)) == SEM_FAILED)
-	{
-		perror("error on semget()");
-		exit(1);
-	}
-
-	if ((sem2 = sem_open(SEM2_NAME, O_CREAT, 0666, 0)) == SEM_FAILED)
+	if ((sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
 	{
 		perror("error on sem_open()");
 		exit(1);
 	}
-	sem_post(sem2);
+	sem_post(sem);
 	// todo: only one instance may be runned
 	
 	// shared memory
@@ -75,38 +69,45 @@ void init_posix(char *ftokPath)
 
 void dispose_posix()
 {
-	if (sem_destroy(sem1) == -1)
+	if (sem_close(sem) == -1)
 	{
-		perror("error on semctl()");
+		perror("error on sem_close()");
 		exit(1);
 	}
 
-	if (sem_destroy(sem2) == -1)
+	if (sem_unlink(SEM_NAME) == -1)
 	{
-		perror("error on sem_destroy()");
+		perror("error on sem_unlink()");
+		exit(1);
+	}
+
+	rc = mq_close(mq);
+	if (rc == -1)
+	{
+		perror("error on mq_close()");
+		exit(1);
+	}
+
+	rc = mq_unlink(MQ_NAME);
+	if (rc == -1)
+	{
+		perror("error on mq_unlink()");
 		exit(1);
 	}
 
 	close(shmid);
 	munmap(shm_address, sizeof(struct register_info)*10);
 	shm_unlink(SHM_NAME);
-
-	// rc = msgctl(msgid, IPC_RMID, 0);
-	// if (rc == -1)
-	// {
-	// 	perror("error on msgctl()");
-	// 	exit(1);
-	// }
 }
 
 void getSemaphoreControl_posix()
 {
-	sem_wait(sem2);
+	sem_wait(sem);
 }
 
 void freeSemaphore_posix()
 {
-	sem_post(sem2);
+	sem_post(sem);
 }
 
 void reguser_posix(pid_t pid)
@@ -148,6 +149,26 @@ void unreguser_posix(pid_t pid)
 			shm_address[i].stdout_count = 0;
 			shm_address[i].stderr_count = 0;
 			break;
+		}
+	}
+	freeSemaphore_posix();
+}
+
+void checkusers_posix()
+{
+	getSemaphoreControl_posix();
+	int i;
+	for (i = 0; i < 10; ++i)
+	{
+		if (shm_address[i].pid > 0)
+		{
+			if (kill(shm_address[i].pid, 0) != 0)
+			{
+				shm_address[i].pid = 0;
+				shm_address[i].stdin_count = 0;
+				shm_address[i].stdout_count = 0;
+				shm_address[i].stderr_count = 0;
+			}
 		}
 	}
 	freeSemaphore_posix();

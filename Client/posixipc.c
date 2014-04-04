@@ -10,14 +10,12 @@
 #include <fcntl.h>
 #include "sysvipc.h"
 
-#define SEM1_NAME "/sem1"
-#define SEM2_NAME "/sem2"
+#define SEM_NAME "/sem"
 #define SHM_NAME "/shm"
 #define MQ_NAME "/mq"
 #define MSGS_IN_MQ 10
 
-sem_t *sem1, *sem2;
-short sarray[2];
+sem_t *sem;
 int rc, shmid;
 mqd_t mq;
 struct register_info *shm_address;
@@ -26,19 +24,12 @@ pid_t pid;
 void init_posix(char *ftokPath, pid_t curPid)
 {
 	pid = curPid;
-	if ((sem1 = sem_open(SEM1_NAME, 0)) == SEM_FAILED)
-	{
-		perror("error on semget()");
-		exit(1);
-	}
-
-	if ((sem2 = sem_open(SEM2_NAME, 0)) == SEM_FAILED)
+	if ((sem = sem_open(SEM_NAME, 0)) == SEM_FAILED)
 	{
 		perror("error on sem_open()");
 		exit(1);
 	}
-	sem_post(sem2);
-	// todo: only one instance may be runned
+	sem_post(sem);
 	
 	// shared memory
 	size_t structSize = sizeof(struct register_info) * 10;
@@ -78,12 +69,12 @@ void dispose_posix()
 
 void getSemaphoreControl_posix()
 {
-	sem_wait(sem2);
+	sem_wait(sem);
 }
 
 void freeSemaphore_posix()
 {
-	sem_post(sem2);
+	sem_post(sem);
 }
 
 void getRegisterInfo_posix()
@@ -107,7 +98,11 @@ void send_message_posix(char *message)
 	strncpy(msg.msg, message, sizeof(msg.msg));
 	msg.target = pid;
 	msg.type = 1;
-	mq_send(mq, (char *) &msg, sizeof(struct mymsg), 1);
+	if (mq_send(mq, (char *) &msg, sizeof(struct mymsg), 1) == -1)
+	{
+		perror("error on mq_send");
+		exit(1);
+	}
 }
 
 struct mymsg recieve_message_posix()

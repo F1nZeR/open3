@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 		if (setsid() < 0) return 1;
 		if (chdir("/") < 0) return 1;
 		close(STDIN_FILENO);
-        //close(STDOUT_FILENO);
+        close(STDOUT_FILENO);
         //close(STDERR_FILENO);
 
 		startProgram(res.executeFile, res.multiplex, res.logfile_fd, res.ftokPath, res.ipcType);

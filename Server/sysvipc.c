@@ -7,12 +7,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "sysvipc.h"
+#include <signal.h>
 #include <string.h>
 #include "workfunctions.h"
 
 key_t key;
 struct sembuf operations[2];
-short sarray[2];
+short sarray[1];
 int rc, semid, shmid, msgid;
 struct shmid_ds shmid_struct;
 struct register_info *shm_address;
@@ -26,15 +27,13 @@ void initSysV(char *ftokPath)
 		exit(1);
 	}
 
-	semid = semget(key, 2, 0666 | IPC_CREAT);
+	semid = semget(key, 1, 0666 | IPC_CREAT | IPC_EXCL);
 	if (semid == -1)
 	{
 		perror("error on semget()");
 		exit(1);
 	}
-	sarray[0] = 1; // is running
-	sarray[1] = 0; // is being used
-	// todo: only one instance may be runned
+	sarray[0] = 0; // is being used
 	rc = semctl(semid, 1, SETALL, sarray);
 	if (rc == -1)
 	{
@@ -91,12 +90,12 @@ void disposeSysV()
 		exit(1);
 	}
 
-	// rc = msgctl(msgid, IPC_RMID, 0);
-	// if (rc == -1)
-	// {
-	// 	perror("error on msgctl()");
-	// 	exit(1);
-	// }
+	rc = msgctl(msgid, IPC_RMID, 0);
+	if (rc == -1)
+	{
+		perror("error on msgctl()");
+		exit(1);
+	}
 }
 
 void getSemaphoreControl_sysv()
@@ -139,6 +138,26 @@ void reguser_sysv(pid_t pid)
 		{
 			shm_address[i].pid = pid;
 			break;
+		}
+	}
+	freeSemaphore_sysv();
+}
+
+void checkusers_sysv()
+{
+	getSemaphoreControl_sysv();
+	int i;
+	for (i = 0; i < 10; ++i)
+	{
+		if (shm_address[i].pid > 0)
+		{
+			if (kill(shm_address[i].pid, 0) != 0)
+			{
+				shm_address[i].pid = 0;
+				shm_address[i].stdin_count = 0;
+				shm_address[i].stdout_count = 0;
+				shm_address[i].stderr_count = 0;
+			}
 		}
 	}
 	freeSemaphore_sysv();

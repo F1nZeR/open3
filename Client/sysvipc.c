@@ -12,7 +12,7 @@
 
 key_t key;
 struct sembuf operations[2];
-short sarray[2];
+short sarray[1];
 int rc, semid, shmid, msgid;
 struct register_info *shm_address;
 struct shmid_ds shmid_struct;
@@ -29,7 +29,7 @@ void initSysV(char *ftokPath, pid_t targetPid)
 	}
 
 	// semaphor
-	semid = semget(key, 2, 0666);
+	semid = semget(key, 1, 0666);
 	if (semid == -1)
 	{
 		perror("error on semget()");

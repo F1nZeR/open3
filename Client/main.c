@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include "arghandle.h"
 #include <unistd.h>
 #include "sysvipc.h"
@@ -49,6 +50,7 @@ void startWork(struct arg_data *res)
 		}
 	}
 
+	signal(SIGCHLD, SIG_DFL);
 	// parent listen messages
 	while (1)
 	{

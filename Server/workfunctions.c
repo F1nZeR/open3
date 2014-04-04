@@ -19,7 +19,8 @@ void start_timer();
 void writelog(char *buffer, int target);
 
 int pipe_rw[2], pipe_wr[2], pipe_err[2];
-int isAnyIO = 0, secs_timer = 1, logfilefd, childpid, curIpcType, lastUserPid;
+int isAnyIO = 0, secs_timer = 1, logfilefd, childpid, 
+	curIpcType, lastUserPid, tickCnt = 0;
 
 void termination_handler(int signum)
 {
@@ -105,7 +106,21 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 
 void sigalrm_handler()
 {
+	tickCnt++;
 	handleStdin();
+	if (tickCnt == 5)
+	{
+		if (curIpcType == 0)
+		{
+			checkusers_posix();
+		}
+		else
+		{
+			checkusers_sysv();
+		}
+		tickCnt = 0;
+	}
+
 	if (!isAnyIO)
 	{
 		writelog("NO I/O", -1);
@@ -238,6 +253,20 @@ int handle_io_select(int child_pid)
 		{
 			res_pid = waitpid(child_pid, &status, WNOHANG | WUNTRACED);
 			if (res_pid == child_pid) return status;
+			
+			tickCnt++;
+			if (tickCnt == 5)
+			{
+				if (curIpcType == 0)
+				{
+					checkusers_posix();
+				}
+				else
+				{
+					checkusers_sysv();
+				}
+				tickCnt = 0;
+			}
 			
 			if (handleStdin() == 0) 
 			{
