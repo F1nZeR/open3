@@ -20,11 +20,40 @@ int rc, shmid;
 mqd_t mq;
 struct register_info *shm_address;
 pid_t pid;
+char *sem_name, *shm_name, *mq_name;
+
+char *getName(char *ftok, char *name)
+{
+	int c = 0, d = 0;
+	char *blank;
+	blank = (char *) malloc((strlen(ftok) + strlen(name) + 1) * sizeof(char));
+	for (c = 0; c < strlen(name); ++c)
+	{
+		blank[d] = name[c];
+		d++;
+	}
+	c = 0;
+	while (ftok[c] != '\0')
+	{
+		if (!(ftok[c] == '/'))
+		{
+			blank[d] = ftok[c];
+			d++;
+		}
+		c++;
+	}
+	blank[d] = '\0';
+	return blank;
+}
 
 void init_posix(char *ftokPath, pid_t curPid)
 {
+	sem_name = getName(ftokPath, SEM_NAME);
+	shm_name = getName(ftokPath, SHM_NAME);
+	mq_name = getName(ftokPath, MQ_NAME);
+
 	pid = curPid;
-	if ((sem = sem_open(SEM_NAME, 0)) == SEM_FAILED)
+	if ((sem = sem_open(sem_name, 0)) == SEM_FAILED)
 	{
 		perror("error on sem_open()");
 		exit(1);
@@ -33,7 +62,7 @@ void init_posix(char *ftokPath, pid_t curPid)
 	
 	// shared memory
 	size_t structSize = sizeof(struct register_info) * 10;
-	shmid = shm_open(SHM_NAME, O_RDWR, 0666);
+	shmid = shm_open(shm_name, O_RDWR, 0666);
 	if (shmid == -1)
 	{
 		perror("error on shm_open()");
@@ -53,7 +82,7 @@ void init_posix(char *ftokPath, pid_t curPid)
 	}
 
 	// msg queue
-	mq = mq_open(MQ_NAME, O_RDWR | O_NONBLOCK);
+	mq = mq_open(mq_name, O_RDWR | O_NONBLOCK);
 	if (mq == -1)
 	{
 		perror("error on mqopen()");

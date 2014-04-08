@@ -21,20 +21,48 @@ short sarray[2];
 int rc, shmid;
 mqd_t mq;
 struct register_info *shm_address;
+char *sem_name, *shm_name, *mq_name;
+
+char *getName(char *ftok, char *name)
+{
+	int c = 0, d = 0;
+	char *blank;
+	blank = (char *) malloc((strlen(ftok) + strlen(name) + 1) * sizeof(char));
+	for (c = 0; c < strlen(name); ++c)
+	{
+		blank[d] = name[c];
+		d++;
+	}
+	c = 0;
+	while (ftok[c] != '\0')
+	{
+		if (!(ftok[c] == '/'))
+		{
+			blank[d] = ftok[c];
+			d++;
+		}
+		c++;
+	}
+	blank[d] = '\0';
+	return blank;
+}
 
 void init_posix(char *ftokPath)
 {
-	if ((sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
+	sem_name = getName(ftokPath, SEM_NAME);
+	shm_name = getName(ftokPath, SHM_NAME);
+	mq_name = getName(ftokPath, MQ_NAME);
+
+	if ((sem = sem_open(sem_name, O_CREAT | O_EXCL, 0666, 0)) == SEM_FAILED)
 	{
 		perror("error on sem_open()");
 		exit(1);
 	}
 	sem_post(sem);
-	// todo: only one instance may be runned
 	
 	// shared memory
 	size_t structSize = sizeof(struct register_info) * 10;
-	shmid = shm_open(SHM_NAME, O_RDWR | O_CREAT, 0666);
+	shmid = shm_open(shm_name, O_RDWR | O_CREAT, 0666);
 	if (shmid == -1)
 	{
 		perror("error on shm_open()");
@@ -59,7 +87,7 @@ void init_posix(char *ftokPath)
 	attr.mq_maxmsg = MSGS_IN_MQ;
 	attr.mq_msgsize = sizeof(struct mymsg);
 	attr.mq_curmsgs = 0;
-	mq = mq_open(MQ_NAME, O_CREAT | O_RDWR | O_NONBLOCK, 0666, &attr);
+	mq = mq_open(mq_name, O_CREAT | O_RDWR | O_NONBLOCK, 0666, &attr);
 	if (mq == -1)
 	{
 		perror("error on mqopen()");
@@ -75,7 +103,7 @@ void dispose_posix()
 		exit(1);
 	}
 
-	if (sem_unlink(SEM_NAME) == -1)
+	if (sem_unlink(sem_name) == -1)
 	{
 		perror("error on sem_unlink()");
 		exit(1);
@@ -88,7 +116,7 @@ void dispose_posix()
 		exit(1);
 	}
 
-	rc = mq_unlink(MQ_NAME);
+	rc = mq_unlink(mq_name);
 	if (rc == -1)
 	{
 		perror("error on mq_unlink()");
@@ -97,7 +125,7 @@ void dispose_posix()
 
 	close(shmid);
 	munmap(shm_address, sizeof(struct register_info)*10);
-	shm_unlink(SHM_NAME);
+	shm_unlink(shm_name);
 }
 
 void getSemaphoreControl_posix()
