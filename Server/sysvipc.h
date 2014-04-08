@@ -7,3 +7,4 @@ struct mymsg recieve_message_sysv();
 void reguser_sysv(pid_t pid);
 void checkusers_sysv();
 void unreguser_sysv(pid_t pid);
+void kill_users_sysv();

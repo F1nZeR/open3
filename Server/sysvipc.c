@@ -117,6 +117,20 @@ void freeSemaphore_sysv()
 	semop(semid, operations, 1);
 }
 
+void kill_users_sysv()
+{
+	getSemaphoreControl_sysv();
+	int i;
+	for (i = 0; i < 10; ++i)
+	{
+		if (shm_address[i].pid != 0)
+		{
+			kill(shm_address[i].pid, SIGTERM);
+		}
+	}
+	freeSemaphore_sysv();
+}
+
 void reguser_sysv(pid_t pid)
 {
 	getSemaphoreControl_sysv();

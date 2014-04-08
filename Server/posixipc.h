@@ -7,3 +7,4 @@ struct mymsg recieve_message_posix();
 void reguser_posix(pid_t pid);
 void checkusers_posix();
 void unreguser_posix(pid_t pid);
+void kill_users_posix();

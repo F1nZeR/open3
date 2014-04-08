@@ -81,6 +81,20 @@ void startWork(struct arg_data *res)
 			{
 				send_message_sysv(buffer);
 			}
+
+			if (strcmp(buffer, "exit\n") == 0)
+			{
+				kill(pid, SIGTERM);
+				if (res->ipcType == 0)
+				{
+					dispose_posix();
+				}
+				else
+				{
+					disposeSysV();
+				}
+				return;							
+			}
 		}
 	}
 }

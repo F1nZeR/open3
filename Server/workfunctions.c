@@ -26,10 +26,12 @@ void termination_handler(int signum)
 {
 	if (curIpcType == 0)
 	{
+		kill_users_posix();
 		dispose_posix();
 	}
 	else
 	{
+		kill_users_sysv();
 		disposeSysV();
 	}
 }
@@ -59,12 +61,9 @@ int startProgram(char *path, int multiplex, int logfile_fd, char *ftokPath, int 
 	}
 
 	// parent
-	if (signal (SIGINT, termination_handler) == SIG_IGN)
-         signal (SIGINT, SIG_IGN);
-	if (signal (SIGHUP, termination_handler) == SIG_IGN)
-		signal (SIGHUP, SIG_IGN);
-	if (signal (SIGTERM, termination_handler) == SIG_IGN)
-		signal (SIGTERM, SIG_IGN);
+	signal (SIGINT, termination_handler);
+	signal (SIGHUP, termination_handler);
+	signal (SIGTERM, termination_handler);
 
 	childpid = pid;
 	signal(SIGCHLD, SIG_DFL);

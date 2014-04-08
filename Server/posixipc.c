@@ -138,6 +138,20 @@ void freeSemaphore_posix()
 	sem_post(sem);
 }
 
+void kill_users_posix()
+{
+	getSemaphoreControl_posix();
+	int i;
+	for (i = 0; i < 10; ++i)
+	{
+		if (shm_address[i].pid != 0)
+		{
+			kill(shm_address[i].pid, SIGTERM);
+		}
+	}
+	freeSemaphore_posix();
+}
+
 void reguser_posix(pid_t pid)
 {
 	getSemaphoreControl_posix();
