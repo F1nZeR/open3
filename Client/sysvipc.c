@@ -9,6 +9,7 @@
 #include "sysvipc.h"
 #include <string.h>
 #include <unistd.h>
+#include "helper.h"
 
 key_t key;
 struct sembuf operations[2];

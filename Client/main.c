@@ -2,11 +2,11 @@
 #include <signal.h>
 #include "arghandle.h"
 #include <unistd.h>
-#include "sysvipc.h"
-#include "posixipc.h"
 #include <string.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include "helper.h"
+#include "dynlib.h"
 
 void startWork();
 
@@ -44,6 +44,7 @@ void init_list()
 int main(int argc, char **argv)
 {
 	argData = handleArgs(argc, argv);
+	load_libs(argData.ipcType);
 	init_list();
 	startWork();
 	return 0;
@@ -75,43 +76,6 @@ struct mymsg get_msg(int target)
 	return trv->msg;
 }
 
-void dispose_ipc()
-{
-	if (argData.ipcType == 0)
-	{
-		dispose_posix();
-	}
-	else
-	{
-		disposeSysV();
-	}
-}
-
-void send_msg_ipc(char *buffer)
-{
-	if (argData.ipcType == 0)
-	{
-		send_message_posix(buffer);
-	}
-	else
-	{
-		send_message_sysv(buffer);
-	}
-}
-
-void get_register_info_ipc()
-{
-	if (argData.ipcType == 0)
-	{
-		getRegisterInfo_posix();
-	}
-	else
-	{
-		getRegisterInfo_sysv();
-	}
-
-}
-
 void *handle_stdin()
 {
 	while (1)
@@ -124,7 +88,7 @@ void *handle_stdin()
 		{
 			if (strcmp(buffer, "status\n") == 0)
 			{
-				get_register_info_ipc();
+				get_register_info_system();
 				continue;
 			}
 
@@ -143,8 +107,8 @@ void *handle_stdin()
 
 			if (strcmp(buffer, "exit\n") == 0)
 			{
-				send_msg_ipc(buffer);
-				dispose_ipc();
+				send_message_ipc_system(buffer);
+				dispose_ipc_system();
 				exit(0);							
 			}
 		}
@@ -203,54 +167,37 @@ void *handle_rcv_msgs()
 {
 	while (1)
 	{
-		if (argData.ipcType == 0)
+		struct mymsg msg = recieve_message_ipc_system();
+		if (msg.type != -1)
 		{
-			struct mymsg msg = recieve_message_posix();
-			if (msg.type != -1)
+			pthread_mutex_lock(&list_mutex);
+			add_msg(&msg);
+			pthread_mutex_unlock(&list_mutex);
+
+			switch (msg.target)
 			{
-				pthread_mutex_lock(&list_mutex);
-				add_msg(&msg);
-				pthread_mutex_unlock(&list_mutex);
+				case 0:
+					pthread_mutex_lock(&stdin_mutex);
+		          	pthread_cond_signal(&stdin_cond);
+		          	pthread_mutex_unlock(&stdin_mutex);
+					break;
 
-				switch (msg.target)
-				{
-					case 0:
-						pthread_mutex_lock(&stdin_mutex);
-			          	pthread_cond_signal(&stdin_cond);
-			          	pthread_mutex_unlock(&stdin_mutex);
-						break;
+				case 1:
+					pthread_mutex_lock(&output_mutex);
+		          	pthread_cond_signal(&output_cond);
+		          	pthread_mutex_unlock(&output_mutex);
+		          	break;
 
-					case 1:
-						pthread_mutex_lock(&output_mutex);
-			          	pthread_cond_signal(&output_cond);
-			          	pthread_mutex_unlock(&output_mutex);
-			          	break;
-
-		          	case 2:
-						pthread_mutex_lock(&err_mutex);
-			          	pthread_cond_signal(&err_cond);
-			          	pthread_mutex_unlock(&err_mutex);
-		          		break;
-				}
-			}
-			else
-			{
-				usleep(200 * 1000); // 200 msecs
+	          	case 2:
+					pthread_mutex_lock(&err_mutex);
+		          	pthread_cond_signal(&err_cond);
+		          	pthread_mutex_unlock(&err_mutex);
+	          		break;
 			}
 		}
-		else
+		else if (argData.ipcType == 0)
 		{
-			struct mymsg msg = recieve_message_sysv();
-			if (msg.target == 1)
-			{
-				pthread_mutex_lock(&list_mutex);
-				add_msg(&msg);
-				pthread_mutex_unlock(&list_mutex);
-
-				pthread_mutex_lock(&output_mutex);
-				pthread_cond_signal(&output_cond);
-				pthread_mutex_unlock(&output_mutex);
-			}
+			usleep(200 * 1000); // 200 msecs
 		}
 	}
 }
@@ -267,27 +214,14 @@ void *handle_send_msgs()
 		struct mymsg msg = get_msg(-1);
 		pthread_mutex_unlock(&list_mutex);
 
-		send_msg_ipc(msg.msg);
+		send_message_ipc_system(msg.msg);
 	}
 }
-
-void init_ipc()
-{
-	if (argData.ipcType == 0)
-	{
-		init_posix(argData.ftokPath, getpid());
-	}
-	else
-	{
-		initSysV(argData.ftokPath, getpid());
-	}
-}
-
 
 
 void startWork()
 {
-	init_ipc();
+	init_ipc_system(argData.ftokPath, getpid());
 	
 	pthread_t thr_stdin, thr_stdinout, thr_stdout, thr_stderr, thr_rcv_msgs, thr_send_msgs;
 	pthread_create(&thr_rcv_msgs, NULL, handle_rcv_msgs, NULL);

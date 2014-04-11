@@ -1,5 +1,4 @@
 #include <unistd.h>
-#include "helper.h"
 
 void initSysV(char *ftokPath, pid_t targetPid);
 void disposeSysV();
