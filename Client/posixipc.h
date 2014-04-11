@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include "helper.h"
 
 void init_posix(char *ftokPath, pid_t curPid);
 void dispose_posix();

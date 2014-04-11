@@ -8,7 +8,6 @@
 #include "posixipc.h"
 #include <string.h>
 #include <fcntl.h>
-#include "sysvipc.h"
 
 #define SEM_NAME "/sem"
 #define SHM_NAME "/shm"
