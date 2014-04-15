@@ -28,7 +28,7 @@ pthread_cond_t err_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t stdin_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t stdin_cond = PTHREAD_COND_INITIALIZER;
 
-pthread_mutex_t list_mutex	= PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct arg_data argData;
 MsgList msgList;
