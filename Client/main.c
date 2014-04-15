@@ -102,8 +102,8 @@ void *handle_stdin()
 			pthread_mutex_unlock(&list_mutex);
 
 			pthread_mutex_lock(&sndmsg_mutex);
-          	pthread_cond_signal(&sndmsg_cond);
-          	pthread_mutex_unlock(&sndmsg_mutex);
+			pthread_cond_signal(&sndmsg_cond);
+			pthread_mutex_unlock(&sndmsg_mutex);
 
 			if (strcmp(buffer, "exit\n") == 0)
 			{
@@ -178,21 +178,21 @@ void *handle_rcv_msgs()
 			{
 				case 0:
 					pthread_mutex_lock(&stdin_mutex);
-		          	pthread_cond_signal(&stdin_cond);
-		          	pthread_mutex_unlock(&stdin_mutex);
+					pthread_cond_signal(&stdin_cond);
+					pthread_mutex_unlock(&stdin_mutex);
 					break;
 
 				case 1:
 					pthread_mutex_lock(&output_mutex);
-		          	pthread_cond_signal(&output_cond);
-		          	pthread_mutex_unlock(&output_mutex);
-		          	break;
+					pthread_cond_signal(&output_cond);
+					pthread_mutex_unlock(&output_mutex);
+					break;
 
-	          	case 2:
+				case 2:
 					pthread_mutex_lock(&err_mutex);
-		          	pthread_cond_signal(&err_cond);
-		          	pthread_mutex_unlock(&err_mutex);
-	          		break;
+					pthread_cond_signal(&err_cond);
+					pthread_mutex_unlock(&err_mutex);
+					break;
 			}
 		}
 		else if (argData.ipcType == 0)
@@ -224,6 +224,7 @@ void startWork()
 	init_ipc_system(argData.ftokPath, getpid());
 	
 	pthread_t thr_stdin, thr_stdinout, thr_stdout, thr_stderr, thr_rcv_msgs, thr_send_msgs;
+
 	pthread_create(&thr_rcv_msgs, NULL, handle_rcv_msgs, NULL);
 	pthread_create(&thr_stdin, NULL, handle_stdin, NULL);
 	pthread_create(&thr_send_msgs, NULL, handle_send_msgs, NULL);
@@ -233,4 +234,8 @@ void startWork()
 
 	pthread_join(thr_rcv_msgs, NULL);
 	pthread_join(thr_stdin, NULL);
+	pthread_join(thr_send_msgs, NULL);
+	pthread_join(thr_stdinout, NULL);
+	pthread_join(thr_stdout, NULL);
+	pthread_join(thr_stderr, NULL);
 }
